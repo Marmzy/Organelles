@@ -11,12 +11,11 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision.models as models
 import torchvision.transforms as transforms
-from tqdm import tqdm
 
-#from CNN import ResNet34
-from collections import deque
+from collections import Counter, deque
 from CustomImageDataset import OrganelleDataset
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -84,49 +83,28 @@ def get_image_mean(target_file, label_file, batch):
     return mean, std
 
 
-def get_weights(data, path, normalise, denoise, k, verbose):
+def get_weights(data, path, k, device, verbose):
 
-    #Initialising variable
+    #Initialising variables
     suffix = ""
-    if normalise:
-        suffix += "_normalised"
-    elif denoise:
-        suffix += "_denoised"
 
     #Loading the data
-    y_train = np.load(os.path.join(path, data, "train", "y_train_{}.npy".format(k)))
+    with open(os.path.join(path, data, "train", "y_train_{}.txt".format(k))) as f:
+        y_train = [line.rstrip() for line in f]
+    count_dict = Counter(y_train)
 
     #Checking for class imbalance
-    label0 = y_train.tolist().count(0)
-    label1 = y_train.tolist().count(1)
-
     if verbose:
         print("\nChecking for class imbalance...\n")
-        print("Number of Non-ectopic heartbeats: {}".format(label0))
-        print("Number of Ventricular ectopic heartbeats: {}".format(label1))
-        print("\t=> Dataset imbalance: ~= {:.2f}\n".format(label0 / label1))
 
-    #Calculate weights to alleviate class imbalance
-    weights = [1 - (samples / (label0 + label1)) for samples in [label0, label1]]
-    return weights
+        #Looping over the classes
+        for key, item in sorted(count_dict.items()):
+            print("Number of {} images: {}".format(key, str(item)))
+        print("\t=> Very slight data imbalance\n")
 
-
-def load_data(data, path, normalise, denoise, batch, k, train):
-
-    #Initialising variable
-    suffix = ""
-    if normalise:
-        suffix += "_normalised"
-    elif denoise:
-        suffix += "_denoised"
-
-    #Constructing the PyTorch DataSet
-    if train:
-        train_data = ECGDataset(os.path.join(path, data, "train", "X_train{}_{}.npy".format(suffix, k)), os.path.join(path, data, "train", "y_train_{}.npy".format(k)))
-        return DataLoader(train_data, batch_size=batch, shuffle=True)
-    else:
-        val_data = ECGDataset(os.path.join(path, data, "val", "X_val{}_{}.npy".format(suffix, k)), os.path.join(path, data, "val", "y_val_{}.npy".format(k)))
-        return DataLoader(val_data, batch_size=batch, shuffle=True)
+    #Calculate weights to alleviate the small class imbalance
+    weights = [1 - (int(v) / sum(count_dict.values())) for k, v in sorted(count_dict.items())]
+    return torch.FloatTensor(weights).to(device)
 
 
 def train_model(model, loss, optimizer, epochs, data_loader, k, fout, device, metric, verbose):
@@ -241,7 +219,6 @@ def train_model(model, loss, optimizer, epochs, data_loader, k, fout, device, me
         print("Best val sens: {:.4f}".format(best_sens), file=f)
 
 
-
 def main():
 
     #Parse arguments from the command line
@@ -269,42 +246,41 @@ def main():
                 transforms.RandomRotation(degrees=45),
                 transforms.Lambda(lambda img: torch.from_numpy(np.array(img).astype(np.float32)).unsqueeze(0)),
                 transforms.Normalize((img_mean), (img_std))
+            ]),
+            "val": transforms.Compose([
+                transforms.Resize((224, 224)),
+                transforms.Lambda(lambda img: torch.from_numpy(np.array(img).astype(np.float32)).unsqueeze(0)),
+                transforms.Normalize((img_mean), (img_std))
             ])
         }
 
         #Creating the training dataset
-        organelle_dataset = OrganelleDataset(os.path.join(path, "data/train/X_train_{}.txt".format(k)), os.path.join(path, "data/train/y_train_{}.txt".format(k)), image_transform["train"])
-        image_loader = DataLoader(organelle_dataset, batch_size=args.batch, shuffle=False, pin_memory=True)
+        if args.verbose:
+            print("Loading train dataset {}...".format(k))
+        organelle_train = OrganelleDataset(os.path.join(path, "data/train/X_train_{}.txt".format(k)), os.path.join(path, "data/train/y_train_{}.txt".format(k)), image_transform["train"])
+        organelle_val = OrganelleDataset(os.path.join(path, "data/val/X_val_{}.txt".format(k)), os.path.join(path, "data/val/y_val_{}.txt".format(k)), image_transform["val"])
+
+        train_data = DataLoader(organelle_train, batch_size=args.batch, shuffle=True, pin_memory=True)
+        val_data = DataLoader(organelle_val, batch_size=args.batch, shuffle=True, pin_memory=True)
+
+        data_loader = {"train": train_data, "val": val_data}
 
         #Creating the output dir/file name
-#        if args.weight:
-#            fname = "ResNet34_weighted{}_lr{}_decay{}_epochs{}_batch{}_{}".format(infix, args.lr, args.decay, args.epochs, args.batch, args.metric)
+        fname = "{}_weighted_lr{}_decay{}_epochs{}_batch{}_{}".format(args.model, args.lr, args.decay, args.epochs, args.batch, args.metric)
 
-            #Creating the output directory if it does not yet exist
-#            if os.path.isdir(os.path.join(fdir, fname)):
-#                fout = os.path.join(fdir, fname, fname + "_fold{}".format(k))
-#            else:
-#                os.makedirs(os.path.join(fdir, fname))
-#                fout = os.path.join(fdir, fname, fname + "_fold{}".format(k))
+        #Creating the output directory if it does not yet exist
+        if os.path.isdir(os.path.join(fdir, fname)):
+            fout = os.path.join(fdir, fname, fname + "_fold{}".format(k))
+        else:
+            os.makedirs(os.path.join(fdir, fname))
+            fout = os.path.join(fdir, fname, fname + "_fold{}".format(k))
 
         #Checking the data
-#        weights = get_weights(args.data, path, args.normalised, args.denoised, k, args.verbose)
-
-        #Loading the data
-#        if args.verbose:
-#            print("Loading train dataset {}...".format(k))
-#        train_data = load_data(args.data, path, args.normalised, args.denoised, args.batch, k, train=True)
-#        val_data = load_data(args.data, path, args.normalised, args.denoised, args.batch, k, train=False)
-#        data_loader = {"train": train_data, "val": val_data}
-
-        #Initialising the model
-#        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-#        model = ResNet34().to(device)
+        weights = get_weights(args.data, path, k, device, args.verbose)
 
         #Settings for training the model
-#        weights = torch.FloatTensor(weights).to(device)
-#        loss = nn.CrossEntropyLoss(weight=weights)
-#        optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.decay)
+        loss = nn.CrossEntropyLoss(weight=weights)
+        optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.decay)
 
         #Training the model
 #        train_model(model, loss, optimizer, args.epochs, data_loader, k, fout, device, args.metric, args.verbose)
