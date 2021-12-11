@@ -1,9 +1,10 @@
-#!/usr/bin/env python
+ #!/usr/bin/env python
 
 import argparse
 import copy
 import numpy as np
 import os
+import pandas as pd
 import pickle as pkl
 import time
 import torch
@@ -107,16 +108,51 @@ def get_weights(data, path, k, device, verbose):
     return torch.FloatTensor(weights).to(device)
 
 
+def confusion_matrix(truths, preds):
+
+    #Initialising variables
+    df_list = []
+
+    #Looping over all the classes
+    for c in range(10):
+        tp, fp, fn, tn = 0, 0, 0, 0
+        for t, p in zip(truths, preds):
+            if t == c and p == c:
+                tp += 1
+            elif t != c and p == c:
+                fp += 1
+            elif t == c and p != c:
+                fn += 1
+            else:
+                tn += 1
+
+        #Calculating several metrics
+        accuracy = (tp + tn) / (tp + fp + fn + tn)
+        sensitivity = tp / (tp + fn)
+        specificity = tn / (tn + fp)
+        precision = tp / (tp + fp)
+        f1 = 2 * (( precision * sensitivity) / (precision + sensitivity))
+        df_list.append(pd.DataFrame({"ACC": [accuracy], "SEN": [sensitivity], "SPE": [specificity], "PRE": [precision],"F1": [f1]}))
+
+    #Merging the metric dataframes
+    df = pd.concat(df_list, ignore_index=True)
+
+    macro_f1 = 2 * ((df["PRE"].mean() * df["PRE"].mean()) / (df["PRE"].mean() + df["PRE"].mean()))
+
+    #Returning metrics
+    return df["ACC"].mean(), df["SEN"].mean(), df["SPE"].mean(), df["PRE"].mean(), macro_f1
+
+
 def train_model(model, loss, optimizer, epochs, data_loader, k, fout, device, metric, verbose):
 
     #Initialising variables
     pkl_queue = deque()
-    best_acc = -1.0
-    best_sens = -1.0
+    best_metric = -1.0
     best_loss = 100.0
     best_model_weights = model.state_dict()
     since = time.time()
     end = time.time()
+
 
     with open(fout + ".log", "w") as f:
         if verbose:
@@ -143,10 +179,7 @@ def train_model(model, loss, optimizer, epochs, data_loader, k, fout, device, me
 
                 #Initialising more variables
                 running_loss = 0
-                running_correct = 0
-                running_train_num = 0
-                ventricular_correct = 0
-                ventricular_size = 0
+                truths, preds = [], []
 
                 #Looping over the minibatches
                 for idx, (data_train, target_train) in enumerate(data):
@@ -155,8 +188,15 @@ def train_model(model, loss, optimizer, epochs, data_loader, k, fout, device, me
 
                     with torch.set_grad_enabled(phase == "train"):
                         y_pred = model(x)
-                        _, predictions = torch.max(y_pred.data, 1)
                         l = loss(y_pred, y)
+
+                        pred = y_pred.cpu().argmax(dim=1)
+                        pred = pred.reshape((len(pred), 1))
+                        preds.append(pred)
+
+                        truth = target_train.numpy()
+                        truth = truth.reshape((len(truth), 1))
+                        truths.append(truth)
 
                         if phase == "train":
                             l.backward()
@@ -164,48 +204,44 @@ def train_model(model, loss, optimizer, epochs, data_loader, k, fout, device, me
 
                     #Calculating statistics
                     running_loss += l.item()
-                    running_correct += torch.eq(predictions, y).sum()
-                    running_train_num += target_train.size(0)
-                    ventricular_size += torch.sum(y)
-                    ventricular_correct += torch.eq(y + predictions, torch.tensor([2]*len(y)).to(device)).sum().to(device)
 
-                #Calculating mean statistics
+                #Scoring predictions through various metrics
+                truths, preds = np.vstack(truths), np.vstack(preds)
+                acc, sens, spef, prec, f1 = confusion_matrix(truths, preds)
                 epoch_loss = running_loss / len(x)
-                epoch_acc = running_correct.double() / running_train_num
-                epoch_sens = 0.0
-                if ventricular_size > 0.0:
-                    epoch_sens = float(ventricular_correct) / float(ventricular_size)
 
-                print("\t{} Loss: {:06.4f} Acc: {:06.4f} Sen: {:06.4f} Time: {:06.4f}".format(phase, epoch_loss, epoch_acc, epoch_sens, time.time()-end), end="")
-                print("\t{} Loss: {:06.4f} Acc: {:06.4f} Sen: {:06.4f} Time: {:06.4f}".format(phase, epoch_loss, epoch_acc, epoch_sens, time.time()-end), end="", file=f)
+                print("\t{} Loss: {:.4f} Acc: {:.4f} Sens: {:.4f} Spef: {:.4f} Prec: {:.4f} F1: {:.4f} Time: {:.4f}".format(phase, epoch_loss, acc, sens, spef, prec, f1, time.time()-end), end="")
+                print("\t{} Loss: {:.4f} Acc: {:.4f} Sens: {:.4f} Spef: {:.4f} Prec: {:.4f} F1: {:.4f} Time: {:.4f}".format(phase, epoch_loss, acc, sens, spef, prec, f1, time.time()-end), end="", file=f)
 
-
-                #Saving the best acc/sens model for the validation data
+                #Saving the model with the highest target metric for the validation data
                 if phase == "val":
                     print("\n", end="")
                     print("\n", end="", file=f)
                     if metric == "accuracy":
-                        if (epoch_acc > best_acc) or (epoch_acc == best_acc and epoch_sens > best_sens):
-                            best_sens = epoch_sens
-                            best_acc = epoch_acc
-                            best_loss = epoch_loss
-                            best_model_weights = copy.deepcopy(model.state_dict())
-                            torch.save(model.state_dict(), "{}_epoch{}.pkl".format(fout, epoch+1))
-                            pkl_queue.append("{}_epoch{}.pkl".format(fout, epoch+1))
-                            if len(pkl_queue) > 1:
-                                pkl_file = pkl_queue.popleft()
-                                os.remove(pkl_file)
+                        model_score = acc
+                        m = "acc"
                     elif metric == "sensitivity":
-                        if (epoch_sens > best_sens) or (epoch_sens == best_sens and epoch_acc > best_acc):
-                            best_sens = epoch_sens
-                            best_acc = epoch_acc
-                            best_loss = epoch_loss
-                            best_model_weights = copy.deepcopy(model.state_dict())
-                            torch.save(model.state_dict(), "{}_epoch{}.pkl".format(fout, epoch+1))
-                            pkl_queue.append("{}_epoch{}.pkl".format(fout, epoch+1))
-                            if len(pkl_queue) > 1:
-                                pkl_file = pkl_queue.popleft()
-                                os.remove(pkl_file)
+                        model_score = sens
+                        m = "sens"
+                    elif metric == "specificity":
+                        model_score = spef
+                        m = "spef"
+                    elif metric == "precision":
+                        model_score = prec
+                        m = "prec"
+                    elif metric == "f1":
+                        model_score = f1
+                        m = "f1"
+
+                    if model_score > best_metric:
+                        best_metric = model_score
+                        best_loss = epoch_loss
+                        best_model_weights = copy.deepcopy(model.state_dict())
+                        torch.save(model.state_dict(), "{}_epoch{}.pkl".format(fout, epoch+1))
+                        pkl_queue.append("{}_epoch{}.pkl".format(fout, epoch+1))
+                        if len(pkl_queue) > 1:
+                            pkl_file = pkl_queue.popleft()
+                            os.remove(pkl_file)
 
                 end = time.time()
 
@@ -213,10 +249,8 @@ def train_model(model, loss, optimizer, epochs, data_loader, k, fout, device, me
         time_elapsed = time.time() - since
         print("\nTraining completed in {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60))
         print("\nTraining completed in {:.0f}m {:.0f}s".format(time_elapsed // 60, time_elapsed % 60), file=f)
-        print("Best val acc: {:.4f}".format(best_acc))
-        print("Best val acc: {:.4f}".format(best_acc), file=f)
-        print("Best val sens: {:.4f}\n".format(best_sens))
-        print("Best val sens: {:.4f}".format(best_sens), file=f)
+        print("Best val {}: {:.4f}".format(m, best_metric))
+        print("Best val {}: {:.4f}".format(m, best_metric), file=f)
 
 
 def main():
@@ -227,17 +261,20 @@ def main():
     #Initialising variables
     path = os.path.join("/".join(os.getcwd().split("/")[:-1]))
     fdir = os.path.join("/".join(os.getcwd().split("/")[:-1]), "data", "output")
-
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = models.__dict__[args.model](pretrained=True)
 
     #Looping over the K folds
     for k in range(args.kfold):
 
+        #Setting up the model
+        model = models.__dict__[args.model](pretrained=True)
+        model.classifier[6] = nn.Linear(4096, 10)
+        model = model.to(device)
+
         #Getting the mean and standard deviation of our dataset
         img_mean, img_std = get_image_mean(os.path.join(path, "data/train/X_train_{}.txt".format(k)), os.path.join(path, "data/train/y_train_{}.txt".format(k)), args.batch)
 
-        #Defining image transformation techinques to apply
+        #Defining image transformation techniques to apply
         image_transform = {
             "train": transforms.Compose([
                 transforms.Resize((224, 224)),
@@ -245,12 +282,14 @@ def main():
                 transforms.RandomVerticalFlip(p=0.5),
                 transforms.RandomRotation(degrees=45),
                 transforms.Lambda(lambda img: torch.from_numpy(np.array(img).astype(np.float32)).unsqueeze(0)),
-                transforms.Normalize((img_mean), (img_std))
+                transforms.Normalize((img_mean), (img_std)),
+                transforms.Lambda(lambda image: image.expand(3, -1, -1))
             ]),
             "val": transforms.Compose([
                 transforms.Resize((224, 224)),
                 transforms.Lambda(lambda img: torch.from_numpy(np.array(img).astype(np.float32)).unsqueeze(0)),
-                transforms.Normalize((img_mean), (img_std))
+                transforms.Normalize((img_mean), (img_std)),
+                transforms.Lambda(lambda image: image.expand(3, -1, -1))
             ])
         }
 
@@ -283,7 +322,7 @@ def main():
         optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.decay)
 
         #Training the model
-#        train_model(model, loss, optimizer, args.epochs, data_loader, k, fout, device, args.metric, args.verbose)
+        train_model(model, loss, optimizer, args.epochs, data_loader, k, fout, device, args.metric, args.verbose)
 
 
 if __name__ == '__main__':

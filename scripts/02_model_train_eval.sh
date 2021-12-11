@@ -15,10 +15,10 @@ function usage(){
     echo " -l, --lr         ADAM learning rate"
     echo " -e, --epochs     Number of epochs"
     echo " -b, --batch      Minibatch size"
-    echo " -m, --metric     Evaluation metric (accuracy | sensitivity)"
+    echo " -m, --metric     Evaluation metric (accuracy | sensitivity | specificity | precision | f1)"
     echo " -k, --kfold      Number of folds the training dataset was split into"
     echo ""
-    echo "Example: $0 -d data -a vgg16_bn -l 0.0001 -e 10 -b 32 -m accuracy -k 5"
+    echo "Example: $0 -d data -a vgg16_bn -l 0.00001 -e 10 -b 8 -m accuracy -k 5"
     exit 1
 }
 
