@@ -18,7 +18,7 @@ function usage(){
     echo " -m, --metric     Evaluation metric (accuracy | sensitivity | specificity | precision | f1)"
     echo " -k, --kfold      Number of folds the training dataset was split into"
     echo ""
-    echo "Example: $0 -d data -a vgg16_bn -l 0.00001 -e 10 -b 8 -m accuracy -k 5"
+    echo "Example: $0 -d data -a vgg16_bn -l 0.00001 -e 10 -b 8 -m f1 -k 5"
     exit 1
 }
 

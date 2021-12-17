@@ -128,15 +128,34 @@ def confusion_matrix(truths, preds):
 
         #Calculating several metrics
         accuracy = (tp + tn) / (tp + fp + fn + tn)
-        sensitivity = tp / (tp + fn)
-        specificity = tn / (tn + fp)
-        precision = tp / (tp + fp)
-        f1 = 2 * (( precision * sensitivity) / (precision + sensitivity))
+
+        if tp + fn > 0:
+            sensitivity = tp / (tp + fn)
+        else:
+            sensitivity = np.nan
+
+        if tn + fp > 0:
+            specificity = tn / (tn + fp)
+        else:
+            specificity = np.nan
+
+        if tp + fp > 0:
+            precision = tp / (tp + fp)
+        else:
+            precision = np.nan
+
+        if not np.isnan(sensitivity) and not np.isnan(specificity) and not np.isnan(precision):
+            if precision + sensitivity > 0:
+                f1 = 2 * (( precision * sensitivity) / (precision + sensitivity))
+            else:
+                f1 = np.nan
+        else:
+            f1 = np.nan
+
         df_list.append(pd.DataFrame({"ACC": [accuracy], "SEN": [sensitivity], "SPE": [specificity], "PRE": [precision],"F1": [f1]}))
 
     #Merging the metric dataframes
     df = pd.concat(df_list, ignore_index=True)
-
     macro_f1 = 2 * ((df["PRE"].mean() * df["PRE"].mean()) / (df["PRE"].mean() + df["PRE"].mean()))
 
     #Returning metrics
@@ -268,7 +287,14 @@ def main():
 
         #Setting up the model
         model = models.__dict__[args.model](pretrained=True)
-        model.classifier[6] = nn.Linear(4096, 10)
+        if "vgg" in args.model:
+            model.classifier[6] = nn.Linear(4096, 10)
+        elif "resnet" in args.model:
+            num_feat = model.fc.in_features
+            model.fc = nn.Linear(num_feat, 10)
+        elif "google" in args.model:
+            model.fc = nn.Linear(1024, 10)
+
         model = model.to(device)
 
         #Getting the mean and standard deviation of our dataset
