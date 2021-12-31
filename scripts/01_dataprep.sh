@@ -50,7 +50,7 @@ fi
 if [ -z "$(ls -A ${PWD%/*}/${OUT_DIR}/raw)" ]; then
     wget -P ${PWD%/*}/${OUT_DIR}/raw "https://ome.grc.nia.nih.gov/iicbu2008/hela.tar.gz"
     tar -zxf ${PWD%/*}/${OUT_DIR}/raw/hela.tar.gz -C ${PWD%/*}/${OUT_DIR}/raw
-#    rm ${PWD%/*}/${OUT_DIR}/raw/hela.tar.gz
+    rm ${PWD%/*}/${OUT_DIR}/raw/hela.tar.gz
 fi
 
 #Preparing the data
