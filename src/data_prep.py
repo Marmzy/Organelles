@@ -72,7 +72,7 @@ def main():
         image_list.append([img for img in glob.glob(subdir + "/*.[tT][iI][fF]")])
         organelle_list.append([os.path.basename(subdir) for img in glob.glob(subdir + "/*.[tT][iI][fF]")])
 
-    #Creating a dataframe form the image paths
+    #Creating lists from the image paths
     X = flatten(image_list)
     y = flatten(organelle_list)
 
