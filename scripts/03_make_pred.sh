@@ -44,8 +44,13 @@ fi
 VALUE_K=$(ls -lh ${PWD%/*}/$IN_DIR/output/$NAME | awk '{print $9}' | grep ".log" | wc -l)
 
 #Evaluating the trained models
-python3  ${PWD%/*}/src/data_eval.py \
+python3 ${PWD%/*}/src/data_eval.py \
         --verbose $VALUE_V \
         --indir $IN_DIR \
         --infiles $NAME \
         --kfold $VALUE_K
+
+#Visualising the top 5 best and worst predictions
+python3 ${PWD%/*}/src/data_visual.py \
+        --indir $IN_DIR \
+        --infiles $NAME

@@ -11,7 +11,7 @@ import torch.nn as nn
 import torchvision.models as models
 import torchvision.transforms as transforms
 
-from collections import Counter, deque
+from collections import Counter
 from CommonFunctions import confusion_matrix, get_image_mean
 from CustomImageDataset import OrganelleDataset
 from torch.utils.data import DataLoader
@@ -82,7 +82,7 @@ def make_preds(model, loss, data_loader, k, fout, device, verbose):
         model.train(False)
 
         #Looping over the minibatches
-        for idx, (data_test, target_test) in enumerate(data):
+        for idx, (data_test, target_test, name) in enumerate(data):
             x, y = data_test.to(device), target_test.to(device)
 
             with torch.set_grad_enabled(False):
@@ -93,8 +93,8 @@ def make_preds(model, loss, data_loader, k, fout, device, verbose):
 
                 #Saving the predictions
                 for i in range(len(pred)):
-                    print("{}\t{}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}".format(
-                        pred[i].item(), y[i].item(), prob[i][0], prob[i][1],  prob[i][2], prob[i][3], prob[i][4], prob[i][5], prob[i][6], prob[i][7], prob[i][8], prob[i][9]), file=f)
+                    print("{}\t{}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{}".format(
+                        pred[i].item(), y[i].item(), prob[i][0], prob[i][1],  prob[i][2], prob[i][3], prob[i][4], prob[i][5], prob[i][6], prob[i][7], prob[i][8], prob[i][9], name[i]), file=f)
 
 
 def score(fout, fout2):
@@ -130,14 +130,15 @@ def main():
     test_dir = os.path.join(path, args.indir, "test")
     fout = os.path.join(path, args.indir, "output", args.infiles, args.infiles + "_predictions.txt")
     fout2 = os.path.join(path, args.indir, "output", args.infiles, args.infiles + "_evaluation.txt")
+    fout3 = os.path.join(path, args.indir, "output", args.infiles, args.infiles + "_images.png")
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     #Writing the header to the output file
     with open(fout, 'w') as f:
-        f.write("Prediction\tGroundTruth\tProbActin\tProbDNA1\tProbEndosome\tProbER\tProbGolgia\tProbGolgpp\tProbLysosome\tProbMicrotubules\tProbMitochondria\tProbNucleolus\n")
+        f.write("Prediction\tGroundTruth\tProbActin\tProbDNA1\tProbEndosome\tProbER\tProbGolgia\tProbGolgpp\tProbLysosome\tProbMicrotubules\tProbMitochondria\tProbNucleolus\tImage\n")
 
     #Getting the mean and standard deviation of our dataset
-    img_mean, img_std = get_image_mean(os.path.join(path, args.indir, "test/X_test.txt"), os.path.join(path, args.indir, "test/y_test.txt"), int(args.infiles.split("_")[6].split("batch")[1]))
+    img_mean, img_std = get_image_mean(os.path.join(path, args.indir, "test/X_test.txt"), os.path.join(path, args.indir, "test/y_test.txt"), int(args.infiles.split("_")[-2].split("batch")[1]))
 
     #Defining image transformation techniques to apply
     image_transform = {
@@ -153,7 +154,7 @@ def main():
     if args.verbose:
         print("Loading the test dataset...")
     organelle_test = OrganelleDataset(os.path.join(path, args.indir, "test/X_test.txt"), os.path.join(path, args.indir, "test/y_test.txt"), image_transform["test"])
-    test_data = DataLoader(organelle_test, batch_size=int(args.infiles.split("_")[6].split("batch")[1]), shuffle=True, pin_memory=True)
+    test_data = DataLoader(organelle_test, batch_size=int(args.infiles.split("_")[-2].split("batch")[1]), shuffle=True, pin_memory=True)
     data_loader = {"test": test_data}
 
     #Looping over the K folds
@@ -187,7 +188,6 @@ def main():
 
     #Scoring the evaluations
     score(fout, fout2)
-
 
 
 if __name__ == '__main__':

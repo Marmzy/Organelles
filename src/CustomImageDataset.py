@@ -29,4 +29,5 @@ class OrganelleDataset(Dataset):
         img = self.transform(img)
 
         label = self.labels[idx]
-        return img, label
+        file = self.images.iloc[idx, :][0].split("/")[-1].split(".")[0]
+        return img, label, file

@@ -121,7 +121,7 @@ def train_model(model, loss, optimizer, epochs, data_loader, k, fout, device, me
                 truths, preds = [], []
 
                 #Looping over the minibatches
-                for idx, (data_train, target_train) in enumerate(data):
+                for idx, (data_train, target_train, name) in enumerate(data):
                     optimizer.zero_grad()
                     x, y = data_train.to(device), target_train.to(device)
 

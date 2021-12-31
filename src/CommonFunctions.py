@@ -80,7 +80,7 @@ def get_image_mean(target_file, label_file, batch):
 
     #Looping over the minibatches and calculating the running mean and std
     channels_sum, channels_sqrd_sum, num_batches = 0, 0, 0
-    for data, _ in image_loader:
+    for data, _, _ in image_loader:
         channels_sum += torch.mean(torch.Tensor.float(data), dim=[0, 2, 3])
         channels_sqrd_sum += torch.mean(torch.Tensor.float(data) ** 2, dim=[0, 2, 3])
         num_batches += 1
