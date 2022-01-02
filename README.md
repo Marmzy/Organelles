@@ -96,6 +96,12 @@ Example:
 - Conversely, image "lysosome_074" was predicted as a fluorescence microscopy image of the endosome, whilst in actuality being an image of the lysosome.
 The model predicted the image to be of a lysosome with only 2.75% confidence.
 
+![googlenet scatter](https://github.com/Marmzy/Organelles/blob/main/data/output/googlenet_weighted_lr0.0001_decay0.0_epochs10_batch8_f1/googlenet_weighted_lr0.0001_decay0.0_epochs10_batch8_f1_scatter.png)
+
+The scatterplot image above gives a better overview of how the confidence for the correct category that the GoogleNet models had. Closely looking at the image,
+one can discern severtal trends:
+ - The models has the most difficulty with classifying Endosome and Mitochondria images
+ - The models tend to have an easier time in classifying Microtubules, Actin and DNA images
 
 ---
 
