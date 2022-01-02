@@ -95,6 +95,7 @@ def make_preds(model, loss, data_loader, k, fout, device, verbose):
                 for i in range(len(pred)):
                     print("{}\t{}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{:.8f}\t{}".format(
                         pred[i].item(), y[i].item(), prob[i][0], prob[i][1],  prob[i][2], prob[i][3], prob[i][4], prob[i][5], prob[i][6], prob[i][7], prob[i][8], prob[i][9], name[i]), file=f)
+                print("\n", file=f)
 
 
 def score(fout, fout2):
@@ -135,7 +136,7 @@ def main():
 
     #Writing the header to the output file
     with open(fout, 'w') as f:
-        f.write("Prediction\tGroundTruth\tProbActin\tProbDNA1\tProbEndosome\tProbER\tProbGolgia\tProbGolgpp\tProbLysosome\tProbMicrotubules\tProbMitochondria\tProbNucleolus\tImage\n")
+        f.write("Prediction\tGroundTruth\tProbActin\tProbDNA\tProbEndosome\tProbER\tProbGolgia\tProbGolgpp\tProbLysosome\tProbMicrotubules\tProbMitochondria\tProbNucleolus\tImage\n")
 
     #Getting the mean and standard deviation of our dataset
     img_mean, img_std = get_image_mean(os.path.join(path, args.indir, "test/X_test.txt"), os.path.join(path, args.indir, "test/y_test.txt"), int(args.infiles.split("_")[-2].split("batch")[1]))
