@@ -17,6 +17,7 @@ def parseArgs():
     #Options for input and output
     parser.add_argument('--indir', type=str, help='Name of the data directory')
     parser.add_argument('--infiles', type=str, help='Stem name of the input files')
+    parser.add_argument('--kfold', type=int, help='Number of cross-validation folds to split the training dataset into')
 
     #Printing arguments to the command line
     args = parser.parse_args()
@@ -100,6 +101,48 @@ def output_scatter(fout, fout3):
     plt.savefig(fout3)
 
 
+def output_training(fout, fout4, k):
+
+    #Initialising variables
+    root = "/home/calvin/Projects/Organelles/data/output/"
+    dir_name = fout.split("/")[-2]
+    metrics_dict = {"accuracy": 5, "sensitivity": 7,
+                    "specificity": 9, "precision": 11,
+                    "f1": 13}
+
+    #Finding the line at which the training statistics were output
+    with open(os.path.join(os.path.dirname(fout), dir_name + "_fold0.log")) as f:
+        for idx, line in enumerate(f.readlines()):
+            if "Epoch" in line:
+                line_start = idx
+                break
+
+    #Creating the figure
+    fig, axs = plt.subplots(2, 5, figsize=(25,12))
+
+    #Looping over the k models that were trained
+    for i in range(k):
+        df = pd.read_csv(os.path.join(os.path.dirname(fout), dir_name + "_fold{}.log".format(i)), sep=r"\s+", skiprows=line_start, header=None)
+        metric = dir_name.split("_")[-1]
+        max_epoch = df.iloc[:, metrics_dict[metric]+15].idxmax()
+
+        axs[0, i].plot(range(1,11), df.iloc[:, 3][:-2].astype(float), linestyle='dashed', color="grey", label="Train")
+        axs[0, i].plot(range(1,11), df.iloc[:, 18][:-2].astype(float), label="Validation")
+        axs[0, i].legend()
+        axs[0, i].axvline(max_epoch+1, linestyle='dashed', color="darkred")
+        axs[0, i].title.set_text("Loss (model {})".format(str(i+1)))
+
+        axs[1, i].plot(range(1,11), df.iloc[:, metrics_dict[metric]][:-2].astype(float), linestyle='dashed', color="grey", label="Train")
+        axs[1, i].plot(range(1,11), df.iloc[:, metrics_dict[metric]+15][:-2].astype(float), label="Validation")
+        axs[1, i].axvline(max_epoch+1, linestyle='dashed', color="darkred")
+        axs[1, i].title.set_text("{} (model {})".format(metric.title(), str(i+1)))
+        axs[1, i].legend()
+
+    fig.suptitle("Training of {}".format(dir_name))
+    plt.tight_layout()
+    plt.savefig(fout4)
+
+
 def main():
 
     #Parse arguments from the command line
@@ -110,12 +153,16 @@ def main():
     fout = os.path.join(path, args.indir, "output", args.infiles, args.infiles + "_predictions.txt")
     fout2 = os.path.join(path, args.indir, "output", args.infiles, args.infiles + "_images.png")
     fout3 = os.path.join(path, args.indir, "output", args.infiles, args.infiles + "_scatter.png")
+    fout4 = os.path.join(path, args.indir, "output", args.infiles, args.infiles + "_training.png")
 
     #Creating evaluation images
     output_img(fout, fout2, path)
 
     #Creating a scatterplot of the predictions
     output_scatter(fout, fout3)
+
+    #Creating lineplots that reflect the training process
+    output_training(fout, fout4, args.kfold)
 
 
 if __name__ == '__main__':

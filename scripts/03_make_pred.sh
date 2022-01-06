@@ -53,4 +53,5 @@ python3 ${PWD%/*}/src/data_eval.py \
 #Visualising the top 5 best and worst predictions
 python3 ${PWD%/*}/src/data_visual.py \
         --indir $IN_DIR \
-        --infiles $NAME
+        --infiles $NAME \
+        --kfold $VALUE_K
