@@ -62,6 +62,12 @@ For each dataset,
  - images are transformed by resizing, flipping and rotating the images and normalising them
  - the models are then tuned using Adam
  - the model is saved at the epoch when it achieves the highest score on the validation dataset given a specified metric
+
+![googlenet training](https://github.com/Marmzy/Organelles/blob/main/data/output/googlenet_weighted_lr0.0001_decay0.0_epochs10_batch8_f1/googlenet_weighted_lr0.0001_decay0.0_epochs10_batch8_f1_training.png)
+
+ 
+The image above shows the training process of 5 models on the training and validation datasets,
+with the dashed red line indicating the epoch at which the validation model reached the highest specified metric score.
  
 ## Evaluation
 
